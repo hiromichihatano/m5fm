@@ -49,10 +49,14 @@ void Setup() {
     ymSpi.writeBytes(init, 2); // Fill 0 before Sets SS Pin Inactive
 
     gpio_set_level(YM_SPISS, YM_SPISS_Inactive); // CS pin inactive
+    gpio_set_level(YM_CS, YM_CS_Inactive); // YM_CS pin inactive
+    gpio_set_level(YM_WR, YM_WRRD_Inactive); // YM_WR Pin inactive
+    usleep(300*1000);
 }
 
 void Write(uint8_t a01, uint8_t data) {
     uint8_t dataAry[] = {data, static_cast<uint8_t>(a01 & 0x03U)};
+    Serial.printf("Write 0x%x: 0x%02x\n", a01, data);
     gpio_set_level(YM_SPISS, YM_SPISS_Active);
     ymSpi.writeBytes(dataAry, 2);
     gpio_set_level(YM_SPISS, YM_SPISS_Inactive);
@@ -62,18 +66,32 @@ void SSG_Write(uint8_t ssgAddr, uint8_t data[], int32_t len) {
     Write(0x00, ssgAddr); // write address
     gpio_set_level(YM_CS, YM_CS_Active);
     gpio_set_level(YM_WR, YM_WRRD_Active);
+    usleep(10);
     gpio_set_level(YM_CS, YM_CS_Inactive);
     // No wait cycles on SSG.
     for(int32_t i=0; i<len; i++){
         gpio_set_level(YM_CS, YM_CS_Active);
-        Write(0x00, data[i]);
+        Write(0x01, data[i]); // write data
+        usleep(10);
         gpio_set_level(YM_CS, YM_CS_Inactive);
     }
     gpio_set_level(YM_WR, YM_WRRD_Inactive);
 }
 
 void SSG_Write(uint8_t ssgAddr, uint8_t data) {
-    SSG_Write(ssgAddr, &data, 1);
+    // SSG_Write(ssgAddr, &data, 1);
+    Serial.printf("SSG Write 0x%02x: 0x%02x\n", ssgAddr, data);
+    Write(0x00, ssgAddr); // write address
+    gpio_set_level(YM_CS, YM_CS_Active);
+    gpio_set_level(YM_WR, YM_WRRD_Active);
+    usleep(10);
+    gpio_set_level(YM_CS, YM_CS_Inactive);
+    usleep(10);
+    Write(0x01, data); // write address
+    gpio_set_level(YM_CS, YM_CS_Active);
+    usleep(10);
+    gpio_set_level(YM_CS, YM_CS_Inactive);
+    gpio_set_level(YM_WR, YM_WRRD_Inactive);
 }
 
 void SSG_SetToneFreq(int32_t channel, int32_t toneFreq){
@@ -87,9 +105,18 @@ void SSG_SetToneFreq(int32_t channel, int32_t toneFreq){
     SSG_Write(ssgAddrFine, volFine);
 }
 
-void SSG_SetEnable(ssg_enables_t enables) {
-    const uint8_t ssgAddrEnable = 0x07;
-    SSG_Write(ssgAddrEnable, enables.value);
+/**
+ * @brief Set Enables
+ * 
+ * @param inoutEn b0: chA, b1: chB / 0=input, 1=output
+ * @param noiseEn 
+ * @param toneEn 
+ */
+void SSG_SetEnable(uint8_t inoutEn, uint8_t noiseEn, uint8_t toneEn) {
+    const uint8_t ssgAddr = 0x07;
+    const uint8_t value = static_cast<uint8_t>(
+        ((inoutEn & 0x03) << 6) | ((noiseEn & 0x07) << 3) | (toneEn & 0x07));
+    SSG_Write(ssgAddr, value);
 }
 
 void SSG_SetAmplitude(int32_t channel, uint8_t mode, uint8_t level) {
