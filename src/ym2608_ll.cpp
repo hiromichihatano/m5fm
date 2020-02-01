@@ -80,7 +80,6 @@ void SSG_Write(uint8_t ssgAddr, uint8_t data[], int32_t len) {
 
 void SSG_Write(uint8_t ssgAddr, uint8_t data) {
     // SSG_Write(ssgAddr, &data, 1);
-    Serial.printf("SSG Write 0x%02x: 0x%02x\n", ssgAddr, data);
     Write(0x00, ssgAddr); // write address
     gpio_set_level(YM_CS, YM_CS_Active);
     gpio_set_level(YM_WR, YM_WRRD_Active);
@@ -109,8 +108,8 @@ void SSG_SetToneFreq(int32_t channel, int32_t toneFreq){
  * @brief Set Enables
  * 
  * @param inoutEn b0: chA, b1: chB / 0=input, 1=output
- * @param noiseEn 
- * @param toneEn 
+ * @param noiseEn b0-b2: ch1-3 / 0=enable, 1=stop
+ * @param toneEn  b0-b2: ch1-3 / 0=enable, 1=stop
  */
 void SSG_SetEnable(uint8_t inoutEn, uint8_t noiseEn, uint8_t toneEn) {
     const uint8_t ssgAddr = 0x07;
@@ -119,10 +118,115 @@ void SSG_SetEnable(uint8_t inoutEn, uint8_t noiseEn, uint8_t toneEn) {
     SSG_Write(ssgAddr, value);
 }
 
+/**
+ * @brief Set Amptlitudes.
+ * 
+ * @param channel channel 0-3
+ * @param mode 0: controlled by level / 1: controlled by Envelope
+ * @param level 0-15, 0=min, 15=max
+ */
 void SSG_SetAmplitude(int32_t channel, uint8_t mode, uint8_t level) {
     const uint8_t ssgAddr = static_cast<uint8_t>(0x08U + channel);
     const uint8_t paramVal = static_cast<uint8_t>((mode & 0x01U) << 4) | (level & 0x0fU);
     SSG_Write(ssgAddr, paramVal);
 }
+
+
+namespace FM {
+    static const useconds_t WaitAfterAddrWrite = 1000 * 1000 * 17 / MASTER_CLOCK + 1;
+    static const useconds_t WaitAfterDataWrite1 = 1000 * 1000 * 83 / MASTER_CLOCK + 1; // addr 0x21-0x9e
+    static const useconds_t WaitAfterDataWrite2 = 1000 * 1000 * 47 / MASTER_CLOCK + 1; // addr 0xa0-0xb6
+    enum class AddrArea { CH1_3, CH4_6};
+    enum class Prescaler { FM1p6_SSG1p4, FM1p3_SSG1p2, FM1p2_SSH1p1};
+    
+    void addrWrite(AddrArea addrArea, uint8_t fmAddr) {
+        const uint8_t a01_addr = (addrArea == AddrArea::CH1_3) ? 0x00 : 0x02;
+
+        Write(a01_addr, fmAddr);
+        usleep(1); // 10ns a01 set -> YM_CS active
+        gpio_set_level(YM_CS, YM_CS_Active);
+        gpio_set_level(YM_WR, YM_WRRD_Active);
+        usleep(1); // 200ns YM_CS active -> inactive
+        gpio_set_level(YM_CS, YM_CS_Inactive);
+
+        usleep(WaitAfterAddrWrite);
+    }
+
+    void fmWrite(AddrArea addrArea, uint8_t fmAddr, uint8_t data) {
+        const uint8_t a01_data = (addrArea == AddrArea::CH1_3) ? 0x01 : 0x03;
+        const uint8_t WaitAfterDataWrite = (fmAddr < 0xa0) ? WaitAfterDataWrite1 : WaitAfterDataWrite2;
+
+        addrWrite(addrArea, fmAddr);
+
+        Write(a01_data, data); // write address
+        usleep(1); // 10ns a01 set -> YM_CS active
+        gpio_set_level(YM_CS, YM_CS_Active);
+        gpio_set_level(YM_CS, YM_CS_Inactive);
+        usleep(1); // 200ns YM_CS active -> inactive
+        gpio_set_level(YM_WR, YM_WRRD_Inactive);
+        usleep(WaitAfterDataWrite);
+    }
+
+    void setLfo(){
+
+    }
+    
+    void OnOffKey(uint8_t channel, uint8_t onOffSlot) {
+
+    }
+
+    void setSchIrq(bool schEn, uint8_t irqEn) {
+
+    }
+
+    void setPrescaler(Prescaler setting) {
+        
+    }
+
+    void setFreq(uint8_t channel, int32_t freq) {
+
+    }
+
+    void setFreq(uint8_t channel, int32_t note, int32_t offsetFreq) {
+
+    }
+
+    void setDtMulti(){
+
+    }
+
+    void setTl(){
+
+    }
+
+    void setKsAr(){
+
+    }
+
+    void setAmDr() {
+
+    }
+
+    void setSr() {
+
+    }
+
+    void setSlRr() {
+
+    }
+
+    void setSsgeg() {
+
+    }
+
+    void setFbAlgo() {
+
+    }
+
+    void setLrAmsPms() {
+
+    }
+}
+
 
 } //namespace
