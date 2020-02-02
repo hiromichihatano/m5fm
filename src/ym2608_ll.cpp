@@ -1,5 +1,6 @@
 #include <M5Stack.h>
 #include "ym2608_ll.h"
+#include <array>
 
 namespace YM2608_LL
 {
@@ -167,20 +168,63 @@ namespace FM {
         usleep(WaitAfterDataWrite);
     }
 
-    void setLfo(){
+    enum class LFO : uint8_t {
+        FREQ3_98 = 0x00,
+        FREQ5_56,
+        FREQ6_02, 
+        FREQ6_37, 
+        FREQ6_88, 
+        FREQ9_63, 
+        FREQ48_1, 
+        FREQ72_2, 
+        DISABLE = 0x08
+    };
 
+    void setLfo(LFO settings) {
+        const uint8_t fmAddr = 0x22;
+        const uint8_t value = static_cast<uint8_t>(settings);
+        fmWrite(AddrArea::CH1_3, fmAddr, value);
     }
     
-    void OnOffKey(uint8_t channel, uint8_t onOffSlot) {
-
+    /**
+     * @brief Key on or off controll
+     * 
+     * @param channel Select channel
+     * @param onOffSlot b0-b3: slot1-4 / 0=Off, 1=On
+     */
+    void onOffKey(uint8_t channel, uint8_t onOffSlot) {
+        const uint8_t fmAddr = 0x28;
+        const uint8_t value = static_cast<uint8_t>((onOffSlot << 4) | (channel & 0x0f));
+        fmWrite(AddrArea::CH1_3, fmAddr, value);
     }
 
+    /**
+     * @brief Set the Sch and Irq settings
+     * 
+     * @param schEn 0: ch1-3 only(OPN) / 1: ch1-6(OPNA)
+     * @param irqEn b0:TA, b1:TB, b2:EOS, b3:BRDY, b4:ZERO
+     */
     void setSchIrq(bool schEn, uint8_t irqEn) {
-
+        const uint8_t fmAddr = 0x29;
+        const uint8_t value = static_cast<uint8_t>((schEn ? 0x80 : 0x00) | (irqEn & 0x1f));
+        fmWrite(AddrArea::CH1_3, fmAddr, value);
     }
 
     void setPrescaler(Prescaler setting) {
-        
+        switch(setting) {
+            case Prescaler::FM1p6_SSG1p4:
+                addrWrite(AddrArea::CH1_3, 0x2d);
+                break;
+            case Prescaler::FM1p3_SSG1p2:
+                addrWrite(AddrArea::CH1_3, 0x2d);
+                addrWrite(AddrArea::CH1_3, 0x2e);
+                break;
+            case Prescaler::FM1p2_SSH1p1:
+                addrWrite(AddrArea::CH1_3, 0x2f);
+                break;
+            default:
+                break;
+        }
     }
 
     void setFreq(uint8_t channel, int32_t freq) {
@@ -191,7 +235,32 @@ namespace FM {
 
     }
 
-    void setDtMulti(){
+    enum class Ch : uint8_t {
+        CH1 = 0x00, CH2 = 0x01, CH3 = 0x02,
+        CH4 = 0x03, CH5 = 0x04, CH6 = 0x05,
+    };
+
+    enum class Slot : uint8_t {
+        SLOT1 = 0x00, SLOT2 = 0x01, SLOT3 = 0x02, SLOT4 = 0x03,
+    };
+
+    const std::array<uint8_t, 6> addrOffsetCh {0x00, 0x01, 0x02, 0x00, 0x01, 0x02};
+    const std::array<uint8_t, 4> addrOffsetSlot {0x00, 0x08, 0x04, 0x0c};
+    static inline uint8_t calcParamAddr(uint8_t baseAddr, Ch ch, Slot slot) {
+        return static_cast<uint8_t>(baseAddr +
+            addrOffsetCh[static_cast<uint8_t>(ch)] +
+            addrOffsetSlot[static_cast<uint8_t>(slot)]);
+    }
+
+    /**
+     * @brief Set the Dtune and Multi controll
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param detune Detune 0-7 (7=-3, 6=-2, 5=-1, 4=0, 0=0, 1=1, 2=2, 3=3)
+     * @param multiple Multiple 0-15 (0=1/2, 1=1, 2=2...15=15)
+     */
+    void setDtMulti(Ch channel, Slot slot, uint8_t detune, uint8_t multiple){
 
     }
 
