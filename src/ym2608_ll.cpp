@@ -244,16 +244,15 @@ namespace FM {
         SLOT1 = 0x00, SLOT2 = 0x01, SLOT3 = 0x02, SLOT4 = 0x03,
     };
 
-    const std::array<uint8_t, 6> addrOffsetCh {0x00, 0x01, 0x02, 0x00, 0x01, 0x02};
-    const std::array<uint8_t, 4> addrOffsetSlot {0x00, 0x08, 0x04, 0x0c};
-    static inline uint8_t calcParamAddr(uint8_t baseAddr, Ch ch, Slot slot) {
-        return static_cast<uint8_t>(baseAddr +
-            addrOffsetCh[static_cast<uint8_t>(ch)] +
+    static inline uint8_t getFmParamAddr(uint8_t baseAddr, Ch ch, Slot slot) {
+        const std::array<uint8_t, 6> addrOffsetCh {0x00, 0x01, 0x02, 0x00, 0x01, 0x02};
+        const std::array<uint8_t, 4> addrOffsetSlot {0x00, 0x08, 0x04, 0x0c};
+        return static_cast<uint8_t>(baseAddr + addrOffsetCh[static_cast<uint8_t>(ch)] +
             addrOffsetSlot[static_cast<uint8_t>(slot)]);
     }
 
     /**
-     * @brief Set the Dtune and Multi controll
+     * @brief Set the Dtune and Multi control
      * 
      * @param channel CH1-6
      * @param slot Slot SLOT1-4
@@ -261,30 +260,39 @@ namespace FM {
      * @param multiple Multiple 0-15 (0=1/2, 1=1, 2=2...15=15)
      */
     void setDtMulti(Ch channel, Slot slot, uint8_t detune, uint8_t multiple){
+        const a01Base = (channel <= Ch::CH3) ? 0x00 : 0x02;
+        const uint8_t fmAddrBase = 0x30;
+        const uint8_t fmAddr = getFmParamAddr(fmAddrBase, channel, slot);
 
     }
 
     void setTl(){
+        const uint8_t baseFmAddr = 0x40;
 
     }
 
     void setKsAr(){
+        const uint8_t baseFmAddr = 0x50;
 
     }
 
     void setAmDr() {
+        const uint8_t baseFmAddr = 0x60;
 
     }
 
     void setSr() {
+        const uint8_t baseFmAddr = 0x70;
 
     }
 
     void setSlRr() {
+        const uint8_t baseFmAddr = 0x80;
 
     }
 
     void setSsgeg() {
+        const uint8_t baseFmAddr = 0x90;
 
     }
 
