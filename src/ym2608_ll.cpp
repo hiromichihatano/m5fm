@@ -137,8 +137,6 @@ namespace FM {
     static const useconds_t WaitAfterAddrWrite = 1000 * 1000 * 17 / MASTER_CLOCK + 1;
     static const useconds_t WaitAfterDataWrite1 = 1000 * 1000 * 83 / MASTER_CLOCK + 1; // addr 0x21-0x9e
     static const useconds_t WaitAfterDataWrite2 = 1000 * 1000 * 47 / MASTER_CLOCK + 1; // addr 0xa0-0xb6
-    enum class AddrArea { CH1_3, CH4_6};
-    enum class Prescaler { FM1p6_SSG1p4, FM1p3_SSG1p2, FM1p2_SSH1p1};
     
     void addrWrite(AddrArea addrArea, uint8_t fmAddr) {
         const uint8_t a01_addr = (addrArea == AddrArea::CH1_3) ? 0x00 : 0x02;
@@ -162,23 +160,14 @@ namespace FM {
         Write(a01_data, data); // write address
         usleep(1); // 10ns a01 set -> YM_CS active
         gpio_set_level(YM_CS, YM_CS_Active);
+        usleep(1); // 10ns a01 set -> YM_CS active
         gpio_set_level(YM_CS, YM_CS_Inactive);
         usleep(1); // 200ns YM_CS active -> inactive
         gpio_set_level(YM_WR, YM_WRRD_Inactive);
         usleep(WaitAfterDataWrite);
-    }
 
-    enum class LFO : uint8_t {
-        FREQ3_98 = 0x00,
-        FREQ5_56,
-        FREQ6_02, 
-        FREQ6_37, 
-        FREQ6_88, 
-        FREQ9_63, 
-        FREQ48_1, 
-        FREQ72_2, 
-        DISABLE = 0x08
-    };
+        Serial.printf("FM Write 0x%02x: 0x%02x\n", fmAddr, data);
+    }
 
     void setLfo(LFO settings) {
         const uint8_t fmAddr = 0x22;
@@ -192,9 +181,10 @@ namespace FM {
      * @param channel Select channel
      * @param onOffSlot b0-b3: slot1-4 / 0=Off, 1=On
      */
-    void onOffKey(uint8_t channel, uint8_t onOffSlot) {
+    void onOffKey(Ch channel, uint8_t onOffSlot) {
         const uint8_t fmAddr = 0x28;
-        const uint8_t value = static_cast<uint8_t>((onOffSlot << 4) | (channel & 0x0f));
+        const uint8_t value = static_cast<uint8_t>((onOffSlot << 4) |
+                (static_cast<uint8_t>(channel) & 0x0f));
         fmWrite(AddrArea::CH1_3, fmAddr, value);
     }
 
@@ -202,7 +192,7 @@ namespace FM {
      * @brief Set the Sch and Irq settings
      * 
      * @param schEn 0: ch1-3 only(OPN) / 1: ch1-6(OPNA)
-     * @param irqEn b0:TA, b1:TB, b2:EOS, b3:BRDY, b4:ZERO
+     * @param irqEn b0:TA, b1:TB, b2:EOS, b3:BRDY, b4:ZERO (0=disable, 1=enable)
      */
     void setSchIrq(bool schEn, uint8_t irqEn) {
         const uint8_t fmAddr = 0x29;
@@ -227,34 +217,24 @@ namespace FM {
         }
     }
 
-    enum class Ch : uint8_t {
-        CH1 = 0x00, CH2 = 0x01, CH3 = 0x02,
-        CH4 = 0x03, CH5 = 0x04, CH6 = 0x05,
-    };
 
-    enum class FNUM_NOTE:uint16_t {
-        C_S = 654,
-        D = 693,
-        D_S = 734,
-        E = 778,
-        F = 824,
-        F_S = 873,
-        G = 925,
-        G_S = 980,
-        A = 1038,
-        A_S = 1100,
-        B = 1165,
-        C = 1235
-    };
-
-    void setFreq(Ch channel, uint8_t shift, uint16_t freq) {
+    /**
+     * @brief Set the Channel Frequency (Block and Fnum)
+     * 
+     * @param channel CH1-6
+     * @param block Note number 0-7
+     * @param fNum FNumber Note
+     */
+    void setBlockFnum(Ch channel, uint8_t block, uint16_t fNumber) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t fmAddr1 = 0xa0 + static_cast<uint8_t>(channel) % 3;
         const uint8_t fmAddr2 = 0xa4 + static_cast<uint8_t>(channel) % 3;
-        const uint8_t fmData1 = static_cast<uint8_t>(freq & 0xff);
-        const uint8_t fmData2 = static_cast<uint8_t>(((shift & 0x07) << 0x03) |
-            ((freq >> 8u) & 0x07));
+        const uint8_t fmData1 = static_cast<uint8_t>(fNumber & 0xff);
+        const uint8_t fmData2 = static_cast<uint8_t>(((block & 0x07) << 0x03) |
+            ((fNumber >> 8u) & 0x07));
 
+        fmWrite(a01Data, fmAddr2, fmData2);
+        fmWrite(a01Data, fmAddr1, fmData1);
     }
 
 
@@ -262,20 +242,36 @@ namespace FM {
      * @brief Set the Channel Frequency (Block and Fnum)
      * 
      * @param channel CH1-6
-     * @param block 0-7
-     * @param fNum fNumber Note
+     * @param block Note number 0-7
+     * @param fNum FNumber Note
      */
-    void setBlockFnum(Ch channel, uint8_t block, FNUM_NOTE fnum) {
-        setFreq(channel, block, static_cast<uint16_t>(fnum));
+    void setBlockFnum(Ch channel, uint8_t block, FNUM_NOTE note) {
+        setBlockFnum(channel, block, static_cast<uint16_t>(note));
     }
 
-    void setFreq(uint8_t channel, int32_t note, int32_t offsetFreq) {
-
+    /**
+     * @brief Set the Freq
+     * 
+     * @param channel CH1-6
+     * @param freq Frequency 0-6,941
+     * 
+     * freq = (FNumber * 1736.111111) >> (26 - block)
+     * 
+     */
+    void setFreq(Ch channel, uint32_t freq) {
+        const uint32_t maxFNumber = 2047;
+        const uint32_t fnumberBase = freq * 1736;
+        uint8_t block = 0;
+        uint16_t fNumber = 0;
+        for(uint_fast8_t i = 0; i < 7; i++) {
+            if(fnumberBase >> (16u + i) < maxFNumber) {
+                block = i;
+                fNumber = static_cast<uint16_t>(fnumberBase) >> (16u + i);
+            }
+        }
+        setBlockFnum(channel, block, fNumber);
     }
 
-    enum class Slot : uint8_t {
-        SLOT1 = 0x00, SLOT2 = 0x01, SLOT3 = 0x02, SLOT4 = 0x03,
-    };
 
     static inline uint8_t getFmParamAddr(uint8_t baseAddr, Ch ch, Slot slot) {
         const std::array<uint8_t, 6> addrOffsetCh {0x00, 0x01, 0x02, 0x00, 0x01, 0x02};
@@ -366,7 +362,7 @@ namespace FM {
      * @param slot Slot SLOT1-4
      * @param sustainRate Sustain Rate 0-31 (0=slow(INF) ... 31=fast)
      */
-    void setRr(Ch channel, Slot slot, uint8_t sustainRate) {
+    void setSr(Ch channel, Slot slot, uint8_t sustainRate) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x70;
         const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
@@ -381,7 +377,7 @@ namespace FM {
      * 
      * @param channel CH1-6
      * @param slot Slot SLOT1-4
-     * @param sustainLevel Sustain level 0-15 (0=0db, 31=-93db)
+     * @param sustainLevel Sustain level 0-15 (0=0db, 15=-93db)
      * @param releaseRate Release rate 0-15 (0:slow, 15=fast)
      */
     void setSlRr(Ch channel, Slot slot, uint8_t sustainLevel, uint8_t releaseRate) {
@@ -417,7 +413,6 @@ namespace FM {
      * @brief Set the Fb Algo
      * 
      * @param channel CH1-6
-     * @param slot Slot SLOT1-4
      * @param feedback Feedback level 0-7 (0=off, 1=pi/16, 2=pi/8 ... 5=pi ... 7=4pi)
      * @param algorithm Operator connection 0-7 (See below)
      * 
@@ -431,7 +426,7 @@ namespace FM {
      * 6: (s1 * s2) + s3 + s4 (2-Serial 2-Sine mode)
      * 7: s1 + s2 + s3 + s4 (4-Parallel sine mode)
      */
-    void setFbAlgo(Ch channel, Slot slot, uint8_t feedback, uint8_t algorithm) {
+    void setFbAlgo(Ch channel, uint8_t feedback, uint8_t algorithm) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t fmAddr = 0xb0 + (static_cast<uint8_t>(channel) % 3);
         const uint8_t fmData = static_cast<uint8_t>(((feedback & 0x07) << 0x03) |
@@ -444,13 +439,12 @@ namespace FM {
      * @brief Set the L&R output and AM Sensitivity and Phase Mod. Sensitivity
      * 
      * @param channel CH1-6
-     * @param slot Slot SLOT1-4
      * @param lOut L-ch output (true=on, false=off)
      * @param rOut R-ch output (true=on, false=off)
      * @param ams AM Sens. 0-3 (0=0, 1=1.4, 2=5.9, 3=11.8 [db])
      * @param pms PM Sens. 0-7 (0=0, 1=3.4, 2=6.7, 3=10, 4=14, 5=20, 6=40, 7=80 [db])
      */
-    void setLrAmsPms(Ch channel, Slot slot, bool lOut, bool rOut, uint8_t ams, uint8_t pms) {
+    void setLRAmsPms(Ch channel, bool lOut, bool rOut, uint8_t ams, uint8_t pms) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t fmAddr = 0xb4 + (static_cast<uint8_t>(channel) % 3);
         const uint8_t fmData = static_cast<uint8_t>((lOut?0x80:0x00) |
@@ -460,7 +454,7 @@ namespace FM {
 
         fmWrite(a01Data, fmAddr, fmData);
     }
-}
+} // namespace FM
 
 
 } //namespace
