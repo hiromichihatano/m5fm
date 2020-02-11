@@ -227,18 +227,51 @@ namespace FM {
         }
     }
 
-    void setFreq(uint8_t channel, int32_t freq) {
+    enum class Ch : uint8_t {
+        CH1 = 0x00, CH2 = 0x01, CH3 = 0x02,
+        CH4 = 0x03, CH5 = 0x04, CH6 = 0x05,
+    };
 
+    enum class FNUM_NOTE:uint16_t {
+        C_S = 654,
+        D = 693,
+        D_S = 734,
+        E = 778,
+        F = 824,
+        F_S = 873,
+        G = 925,
+        G_S = 980,
+        A = 1038,
+        A_S = 1100,
+        B = 1165,
+        C = 1235
+    };
+
+    void setFreq(Ch channel, uint8_t shift, uint16_t freq) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
+        const uint8_t fmAddr1 = 0xa0 + static_cast<uint8_t>(channel) % 3;
+        const uint8_t fmAddr2 = 0xa4 + static_cast<uint8_t>(channel) % 3;
+        const uint8_t fmData1 = static_cast<uint8_t>(freq & 0xff);
+        const uint8_t fmData2 = static_cast<uint8_t>(((shift & 0x07) << 0x03) |
+            ((freq >> 8u) & 0x07));
+
+    }
+
+
+    /**
+     * @brief Set the Channel Frequency (Block and Fnum)
+     * 
+     * @param channel CH1-6
+     * @param block 0-7
+     * @param fNum fNumber Note
+     */
+    void setBlockFnum(Ch channel, uint8_t block, FNUM_NOTE fnum) {
+        setFreq(channel, block, static_cast<uint16_t>(fnum));
     }
 
     void setFreq(uint8_t channel, int32_t note, int32_t offsetFreq) {
 
     }
-
-    enum class Ch : uint8_t {
-        CH1 = 0x00, CH2 = 0x01, CH3 = 0x02,
-        CH4 = 0x03, CH5 = 0x04, CH6 = 0x05,
-    };
 
     enum class Slot : uint8_t {
         SLOT1 = 0x00, SLOT2 = 0x01, SLOT3 = 0x02, SLOT4 = 0x03,
@@ -250,6 +283,7 @@ namespace FM {
         return static_cast<uint8_t>(baseAddr + addrOffsetCh[static_cast<uint8_t>(ch)] +
             addrOffsetSlot[static_cast<uint8_t>(slot)]);
     }
+
 
     /**
      * @brief Set the Dtune and Multi control
@@ -264,16 +298,29 @@ namespace FM {
         const uint8_t baseFmAddr = 0x30;
         const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
         const uint8_t fmData = static_cast<uint8_t>((detune & 0x07) << 0x04) |
-                static_cast<uint8_t>(multiple & 0x15);
+                static_cast<uint8_t>(multiple & 0x0f);
 
         fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setTl(Ch channel, Slot slot) {
+
+    /**
+     * @brief Set the Total Level
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param totalLevel 0-63 (0=0db(MAX) ... 63=-96db(MIN))
+     */
+    void setTl(Ch channel, Slot slot, uint8_t totalLevel) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x40;
+        const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
+        const uint8_t fmData = static_cast<uint8_t>(totalLevel & 0x7f);
 
+        fmWrite(a01Data, fmAddr, fmData);
     }
+
+
     /**
      * @brief Set the Ks and AttackRate
      * 
@@ -298,51 +345,120 @@ namespace FM {
      * @param channel CH1-6
      * @param slot Slot SLOT1-4
      * @param amon Amplify Modulation (false=off, True=on)
-     * @param decayRate Decay Rate 0-31 (0=low speed(INF), 31=max speed)
+     * @param decayRate Decay Rate 0-31 (0=slow(INF) ... 31=fast)
      */
     void setAmDr(Ch channel, Slot slot, bool amon, uint8_t decayRate) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x60;
         const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
-        const uint8_t fmData = static_cast<uint8_t>(amon?0x70:0x00) |
+        const uint8_t fmData = static_cast<uint8_t>(amon?0x80:0x00) |
                 static_cast<uint8_t>(decayRate & 0x1f);
 
         fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setSr(Ch channel, Slot slot) {
+
+
+    /**
+     * @brief Set the Sustain rate
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param sustainRate Sustain Rate 0-31 (0=slow(INF) ... 31=fast)
+     */
+    void setRr(Ch channel, Slot slot, uint8_t sustainRate) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x70;
         const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
-        const uint8_t fmData;
+        const uint8_t fmData = static_cast<uint8_t>(sustainRate & 0x1f);
 
         fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setSlRr(Ch channel, Slot slot) {
+
+    /**
+     * @brief Set the Sustain level and Release rate
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param sustainLevel Sustain level 0-15 (0=0db, 31=-93db)
+     * @param releaseRate Release rate 0-15 (0:slow, 15=fast)
+     */
+    void setSlRr(Ch channel, Slot slot, uint8_t sustainLevel, uint8_t releaseRate) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x80;
         const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
-        const uint8_t fmData;
+        const uint8_t fmData = static_cast<uint8_t>((sustainLevel & 0x0f) << 0x04) |
+                static_cast<uint8_t>(releaseRate & 0x0f);
 
         fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setSsgeg(Ch channel, Slot slot) {
+    /**
+     * @brief Set the SSG-type Envelope control
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param envType envelope Type 0-7 (see below)
+     * 
+     * 0: \\\\ , 1: \___ , 2: \/\/ , 3: \^^^ ,
+     * 4: //// , 5: /^^^ , 6: /\/\ , 7: /___
+     */
+    void setSsgEg(Ch channel, Slot slot, uint8_t envType) {
         const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x90;
         const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
-        const uint8_t fmData;
+        const uint8_t fmData = static_cast<uint8_t>(envType & 0x0f);
 
         fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setFbAlgo(Ch channel, Slot slot) {
+    /**
+     * @brief Set the Fb Algo
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param feedback Feedback level 0-7 (0=off, 1=pi/16, 2=pi/8 ... 5=pi ... 7=4pi)
+     * @param algorithm Operator connection 0-7 (See below)
+     * 
+     * Operator connection settings (Serial conn. = '*', Parallel conn. = '+')
+     * 0: s1 * s2 * s3 * s4 (4-Serial mode)
+     * 1: (s1 + s2) * s3 * s4 (Double modulation 3-serial mode)
+     * 2: (s1 + (s2 * s3)) * s4 (Double modulation mode 1)
+     * 3: (s1 * s2) + s3) * s4 (Double modulation mode 2)
+     * 4: (s1 * s2) + (s3 * s4) (2-Serial 2-Parallel mode)
+     * 5: s1 * (s2 + s3 + s4) (Common modulation 3-parallel mode)
+     * 6: (s1 * s2) + s3 + s4 (2-Serial 2-Sine mode)
+     * 7: s1 + s2 + s3 + s4 (4-Parallel sine mode)
+     */
+    void setFbAlgo(Ch channel, Slot slot, uint8_t feedback, uint8_t algorithm) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
+        const uint8_t fmAddr = 0xb0 + (static_cast<uint8_t>(channel) % 3);
+        const uint8_t fmData = static_cast<uint8_t>(((feedback & 0x07) << 0x03) |
+                (algorithm & 0x07));
 
+        fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setLrAmsPms(Ch channel, Slot slot) {
+    /**
+     * @brief Set the L&R output and AM Sensitivity and Phase Mod. Sensitivity
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param lOut L-ch output (true=on, false=off)
+     * @param rOut R-ch output (true=on, false=off)
+     * @param ams AM Sens. 0-3 (0=0, 1=1.4, 2=5.9, 3=11.8 [db])
+     * @param pms PM Sens. 0-7 (0=0, 1=3.4, 2=6.7, 3=10, 4=14, 5=20, 6=40, 7=80 [db])
+     */
+    void setLrAmsPms(Ch channel, Slot slot, bool lOut, bool rOut, uint8_t ams, uint8_t pms) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
+        const uint8_t fmAddr = 0xb4 + (static_cast<uint8_t>(channel) % 3);
+        const uint8_t fmData = static_cast<uint8_t>((lOut?0x80:0x00) |
+                (rOut?0x40:0x00) |
+                ((ams & 0x03) << 0x04) |
+                (pms & 0x07));
 
+        fmWrite(a01Data, fmAddr, fmData);
     }
 }
 
