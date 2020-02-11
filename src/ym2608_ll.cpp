@@ -259,48 +259,89 @@ namespace FM {
      * @param detune Detune 0-7 (7=-3, 6=-2, 5=-1, 4=0, 0=0, 1=1, 2=2, 3=3)
      * @param multiple Multiple 0-15 (0=1/2, 1=1, 2=2...15=15)
      */
-    void setDtMulti(Ch channel, Slot slot, uint8_t detune, uint8_t multiple){
-        const a01Base = (channel <= Ch::CH3) ? 0x00 : 0x02;
-        const uint8_t fmAddrBase = 0x30;
-        const uint8_t fmAddr = getFmParamAddr(fmAddrBase, channel, slot);
+    void setDtMulti(Ch channel, Slot slot, uint8_t detune, uint8_t multiple) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
+        const uint8_t baseFmAddr = 0x30;
+        const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
+        const uint8_t fmData = static_cast<uint8_t>((detune & 0x07) << 0x04) |
+                static_cast<uint8_t>(multiple & 0x15);
 
+        fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setTl(){
+    void setTl(Ch channel, Slot slot) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x40;
 
     }
-
-    void setKsAr(){
+    /**
+     * @brief Set the Ks and AttackRate
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param ks Key scale 0-3 (0=none, 3=max)
+     * @param attackRate AttackRate 0-31 (0=low speed(INF), 31=max speed)
+     */
+    void setKsAr(Ch channel, Slot slot, uint8_t ks, uint8_t attackRate){
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x50;
+        const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
+        const uint8_t fmData = static_cast<uint8_t>((ks & 0x03) << 0x06) |
+                static_cast<uint8_t>(attackRate & 0x1f);
 
+        fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setAmDr() {
+    /**
+     * @brief Set the Amon and DecayRate
+     * 
+     * @param channel CH1-6
+     * @param slot Slot SLOT1-4
+     * @param amon Amplify Modulation (false=off, True=on)
+     * @param decayRate Decay Rate 0-31 (0=low speed(INF), 31=max speed)
+     */
+    void setAmDr(Ch channel, Slot slot, bool amon, uint8_t decayRate) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x60;
+        const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
+        const uint8_t fmData = static_cast<uint8_t>(amon?0x70:0x00) |
+                static_cast<uint8_t>(decayRate & 0x1f);
 
+        fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setSr() {
+    void setSr(Ch channel, Slot slot) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x70;
+        const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
+        const uint8_t fmData;
 
+        fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setSlRr() {
+    void setSlRr(Ch channel, Slot slot) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x80;
+        const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
+        const uint8_t fmData;
 
+        fmWrite(a01Data, fmAddr, fmData);
     }
 
-    void setSsgeg() {
+    void setSsgeg(Ch channel, Slot slot) {
+        const AddrArea a01Data = (channel <= Ch::CH3) ? AddrArea::CH1_3 : AddrArea::CH4_6;
         const uint8_t baseFmAddr = 0x90;
+        const uint8_t fmAddr = getFmParamAddr(baseFmAddr, channel, slot);
+        const uint8_t fmData;
+
+        fmWrite(a01Data, fmAddr, fmData);
+    }
+
+    void setFbAlgo(Ch channel, Slot slot) {
 
     }
 
-    void setFbAlgo() {
-
-    }
-
-    void setLrAmsPms() {
+    void setLrAmsPms(Ch channel, Slot slot) {
 
     }
 }
