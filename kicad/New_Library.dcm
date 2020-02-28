@@ -1,0 +1,17 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP 4094
+D 8bit static shift registor / store registor
+K CMOS CNT CNT14
+F http://akizukidenshi.com/download/ds/Toshiba/TC4094BP_datasheet_ja_20140301.pdf
+$ENDCMP
+#
+$CMP YM2608B
+D FM Operator type N-A, OPNA
+$ENDCMP
+#
+$CMP YM3016-D
+D 2-Channel Serial&Binary input Floating D/A Converter (DAC-GS5)
+$ENDCMP
+#
+#End Doc Library

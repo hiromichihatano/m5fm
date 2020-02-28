@@ -83,3 +83,5 @@ fp-info-cache
 # Exported BOM files
 m5fm.xml
 m5fm.csv
+m5fm.html
+*.zip
